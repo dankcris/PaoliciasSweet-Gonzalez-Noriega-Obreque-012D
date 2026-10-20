@@ -5,7 +5,7 @@ pastelería fina y banquetería. Proyecto de la asignatura **DSY1105 – Desarro
 (Evaluación Parcial 2).
 
 ## Integrantes
-- Tomás [Apellido]
+- Tomás Gonzalez
 - Matías Obreque
 - Matías Noriega
 

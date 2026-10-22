@@ -31,17 +31,6 @@ pastelería fina y banquetería. Proyecto de la asignatura **DSY1105 – Desarro
 - Dotación estimada: 1 garzón cada 20 asistentes y 1 ayudante de cocina cada 40.
 - Todos los datos son ficticios (Ley 19.628 y Ley 21.719).
 
-## Requisitos de la evaluación
-| Requisito | Dónde está |
-|---|---|
-| MVVM | `viewmodel/`, `data/`, `ui/` |
-| Formularios validados con íconos y mensajes | `ui/components/CampoTexto.kt`, `AuthScreen`, `CotizarScreen` |
-| Validaciones desacopladas de la UI | `domain/Validaciones.kt` y `domain/Cotizador.kt` |
-| Persistencia local | Room: `data/` (usuarios, productos, reservas) |
-| Navegación | `ui/AppNav.kt` (Navigation Compose, con argumentos y transiciones) |
-| Animaciones | `AnimatedVisibility`, `AnimatedContent`, `animateContentSize`, `animateItem`, `animateIntAsState`, transiciones de navegación |
-| Recursos nativos | Cámara, galería y ubicación (`recursos/`) |
-| Pruebas unitarias | `app/src/test/` (cotizador y validaciones) |
 
 ## Cuenta de administradora (ficticia)
 - Correo: `admin@paoliciassweet.cl`

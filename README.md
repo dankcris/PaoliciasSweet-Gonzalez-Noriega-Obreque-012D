@@ -58,4 +58,4 @@ app/src/main/java/cl/duoc/paoliciassweet/
 ├── recursos/    Cámara (FileProvider) y ubicación
 └── ui/          Pantallas Compose, navegación y componentes
 ```
-- Planificación en Trello: https://trello.com/invite/b/6ad9473966e153d69ba23d5a/ATTI7c48850f8a2e1f75dd6b23dbd23c1bbd1D99ADC4/paoliciassweet
+- Planificación en Trello: https://trello.com/b/HEVoE6OG/paoliciassweet

@@ -8,6 +8,9 @@ import cl.duoc.paoliciassweet.data.AppDatabase
 import cl.duoc.paoliciassweet.data.Repositorio
 import cl.duoc.paoliciassweet.data.Reserva
 import cl.duoc.paoliciassweet.data.Sesion
+import cl.duoc.paoliciassweet.network.FechaMapper
+import cl.duoc.paoliciassweet.network.RetrofitClient
+import cl.duoc.paoliciassweet.network.UriMultipartHelper
 import cl.duoc.paoliciassweet.recursos.copiarAInterno
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,6 +20,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import java.io.File
 
 data class ComprobanteUiState(
     val reserva: Reserva? = null,
@@ -35,8 +42,38 @@ class ComprobanteViewModel(app: Application) : AndroidViewModel(app) {
         val usuarioId = Sesion.usuarioId.value ?: return
         job?.cancel()
         job = viewModelScope.launch {
-            repo.reserva(reservaId, usuarioId).collect { reserva ->
-                _state.update { it.copy(reserva = reserva) }
+            repo.reserva(reservaId, usuarioId).collect { reservaLocal ->
+                if (reservaLocal != null) {
+                    _state.update { it.copy(reserva = reservaLocal) }
+                } else {
+                    // Si la reserva viene directo del backend, la busca en el microservicio
+                    try {
+                        val dto = RetrofitClient.reservasApi.listarReservas()
+                            .find { it.id == reservaId }
+                        if (dto != null) {
+                            _state.update {
+                                it.copy(
+                                    reserva = Reserva(
+                                        id = dto.id,
+                                        usuarioId = usuarioId,
+                                        productoId = dto.productoId,
+                                        productoNombre = dto.productoNombre,
+                                        fechaEvento = FechaMapper.isoStringToLong(dto.fechaEvento),
+                                        bloque = "Confirmado",
+                                        asistentes = dto.asistentes,
+                                        observaciones = dto.notas ?: "",
+                                        total = dto.total,
+                                        abono = dto.abono,
+                                        estado = dto.estado,
+                                        latitud = null,
+                                        longitud = null,
+                                        creadaEn = System.currentTimeMillis()
+                                    )
+                                )
+                            }
+                        }
+                    } catch (_: Exception) { }
+                }
             }
         }
     }
@@ -56,15 +93,52 @@ class ComprobanteViewModel(app: Application) : AndroidViewModel(app) {
     fun enviar() {
         val s = _state.value
         val reserva = s.reserva ?: return
-        val uri = s.fotoUri
-        if (uri == null) {
+        val uriString = s.fotoUri
+        if (uriString == null) {
             _state.update { it.copy(error = "Adjunta el comprobante de transferencia (cámara o galería)") }
             return
         }
         val usuarioId = Sesion.usuarioId.value ?: return
+
         viewModelScope.launch {
-            repo.adjuntarComprobante(reserva.id, usuarioId, uri)
-            _state.update { it.copy(enviado = true) }
+            try {
+                // Soporta tanto rutas internas (/data/...) como URIs (content:// o file://)
+                val archivoPart = withContext(Dispatchers.IO) {
+                    if (uriString.startsWith("/")) {
+                        val file = File(uriString)
+                        val reqFile = file.asRequestBody("image/jpeg".toMediaTypeOrNull())
+                        MultipartBody.Part.createFormData("archivo", file.name, reqFile)
+                    } else {
+                        UriMultipartHelper.uriToMultipart(
+                            getApplication<Application>(),
+                            Uri.parse(uriString)
+                        )
+                    }
+                } ?: throw IllegalStateException("No se pudo procesar el archivo de imagen")
+
+                // 1. Subir imagen al microservicio comprobantes-service (puerto 8083)
+                RetrofitClient.comprobantesApi.subirComprobante(
+                    reservaId = UriMultipartHelper.textToRequestBody(reserva.id.toString()),
+                    montoAbonado = UriMultipartHelper.textToRequestBody(reserva.abono.toString()),
+                    archivo = archivoPart
+                )
+
+                // 2. Actualizar estado de la reserva en reservas-service (puerto 8082)
+                try {
+                    RetrofitClient.reservasApi.cambiarEstado(
+                        reserva.id,
+                        mapOf("estado" to "COMPROBANTE_ENVIADO")
+                    )
+                } catch (_: Exception) { }
+
+                // 3. Guardar respaldo en Room local
+                repo.adjuntarComprobante(reserva.id, usuarioId, uriString)
+                _state.update { it.copy(enviado = true) }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(error = "Error al subir el comprobante al servidor: ${e.localizedMessage}")
+                }
+            }
         }
     }
 }

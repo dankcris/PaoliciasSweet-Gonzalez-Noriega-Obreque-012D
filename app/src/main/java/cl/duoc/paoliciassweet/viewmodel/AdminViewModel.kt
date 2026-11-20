@@ -10,6 +10,7 @@ import cl.duoc.paoliciassweet.data.ReservaAgenda
 import cl.duoc.paoliciassweet.data.Roles
 import cl.duoc.paoliciassweet.data.Sesion
 import cl.duoc.paoliciassweet.domain.Cotizador
+import cl.duoc.paoliciassweet.network.RetrofitClient
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -37,6 +38,33 @@ class AdminViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _filtro = MutableStateFlow<String?>(null)
     val filtro: StateFlow<String?> = _filtro.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            Sesion.rol.collect { rol ->
+                if (rol == Roles.ADMIN) sincronizarConServidor()
+            }
+        }
+    }
+
+    fun sincronizarConServidor() {
+        if (!Sesion.esAdmin) return
+        viewModelScope.launch {
+            try {
+                val remotas = RetrofitClient.reservasApi.listarReservas()
+                remotas.forEach { dto ->
+                    val estadoLocal = if (dto.estado == "COMPROBANTE_ENVIADO") {
+                        EstadoReserva.EN_REVISION
+                    } else {
+                        dto.estado
+                    }
+                    repo.cambiarEstado(dto.id, estadoLocal)
+                }
+            } catch (_: Exception) {
+                // Mantiene los datos locales si el servidor no responde
+            }
+        }
+    }
 
     private val agenda: StateFlow<List<ReservaAgenda>> = Sesion.rol
         .flatMapLatest { rol ->
@@ -73,11 +101,21 @@ class AdminViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun cambiar(id: Long, estado: String) {
         if (!Sesion.esAdmin) return
-        viewModelScope.launch { repo.cambiarEstado(id, estado) }
+        viewModelScope.launch {
+            try {
+                RetrofitClient.reservasApi.cambiarEstado(id, mapOf("estado" to estado))
+            } catch (_: Exception) { }
+            repo.cambiarEstado(id, estado)
+        }
     }
 
     fun rechazarComprobante(id: Long) {
         if (!Sesion.esAdmin) return
-        viewModelScope.launch { repo.rechazarComprobante(id) }
+        viewModelScope.launch {
+            try {
+                RetrofitClient.reservasApi.cambiarEstado(id, mapOf("estado" to "PENDIENTE"))
+            } catch (_: Exception) { }
+            repo.rechazarComprobante(id)
+        }
     }
 }

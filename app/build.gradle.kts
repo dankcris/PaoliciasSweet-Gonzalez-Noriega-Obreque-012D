@@ -1,9 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
 }
+
+val keystoreProps = Properties().apply {
+    val archivo = rootProject.file("keystore.properties")
+    if (archivo.exists()) archivo.inputStream().use { load(it) }
+}
+
+fun urlDe(nombre: String): String = "\"" + (project.findProperty(nombre)?.toString() ?: "") + "\""
 
 android {
     namespace = "cl.duoc.paoliciassweet"
@@ -17,9 +26,28 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file(keystoreProps.getProperty("storeFile", "keystore/paoliciassweet.jks"))
+            storePassword = keystoreProps.getProperty("storePassword")
+            keyAlias = keystoreProps.getProperty("keyAlias")
+            keyPassword = keystoreProps.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
+        debug {
+            enableUnitTestCoverage = true
+            buildConfigField("String", "CATALOGO_URL", urlDe("catalogoUrlLocal"))
+            buildConfigField("String", "RESERVAS_URL", urlDe("reservasUrlLocal"))
+            buildConfigField("String", "COMPROBANTES_URL", urlDe("comprobantesUrlLocal"))
+        }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
+            buildConfigField("String", "CATALOGO_URL", urlDe("catalogoUrlCloud"))
+            buildConfigField("String", "RESERVAS_URL", urlDe("reservasUrlCloud"))
+            buildConfigField("String", "COMPROBANTES_URL", urlDe("comprobantesUrlCloud"))
         }
     }
     compileOptions {
@@ -31,6 +59,10 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 }
 
@@ -55,7 +87,16 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
+    // Retrofit + Gson para consumir los microservicios REST
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
+
+    // Interceptor para ver las peticiones y respuestas en el Logcat
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
     testImplementation("junit:junit:4.13.2")
+    testImplementation("io.mockk:mockk:1.13.12")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

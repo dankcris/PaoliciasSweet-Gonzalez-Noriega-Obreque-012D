@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cl.duoc.paoliciassweet.data.Producto
 import cl.duoc.paoliciassweet.domain.FILTROS_CATALOGO
+import cl.duoc.paoliciassweet.domain.ResumenIndicadores
 import cl.duoc.paoliciassweet.domain.moneda
 import cl.duoc.paoliciassweet.ui.components.iconoCategoria
 import cl.duoc.paoliciassweet.viewmodel.CatalogoViewModel
@@ -51,6 +52,7 @@ fun CatalogoScreen(
 ) {
     val productos by vm.productos.collectAsStateWithLifecycle()
     val filtro by vm.filtro.collectAsStateWithLifecycle()
+    val indicadores by vm.indicadores.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -73,6 +75,7 @@ fun CatalogoScreen(
                 .padding(padding)
                 .padding(horizontal = 16.dp)
         ) {
+            indicadores?.let { IndicadoresCard(it) }
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(FILTROS_CATALOGO) { categoria ->
                     FilterChip(
@@ -128,6 +131,39 @@ private fun ProductoCard(producto: Producto, onClick: () -> Unit, modifier: Modi
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
+        }
+    }
+}
+
+/** Datos de la API externa mindicador.cl (UF y dólar del día). */
+@Composable
+private fun IndicadoresCard(resumen: ResumenIndicadores) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text("Indicadores económicos de hoy", style = MaterialTheme.typography.labelLarge)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "UF: ${resumen.uf?.let { moneda(it.toInt()) } ?: "-"}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    "Dólar: ${resumen.dolar?.let { moneda(it.toInt()) } ?: "-"}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            Text(
+                "Fuente: mindicador.cl${resumen.fecha?.let { " · $it" } ?: ""}",
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 }

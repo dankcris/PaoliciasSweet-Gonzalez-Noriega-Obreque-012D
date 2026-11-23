@@ -8,5 +8,9 @@
 /captures
 .externalNativeBuild
 .cxx
-*.apk
 *.aab
+
+# Archivos privados de firma: no publicar en GitHub
+keystore/
+keystore.properties
+*.jks

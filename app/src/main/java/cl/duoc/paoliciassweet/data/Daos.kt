@@ -48,6 +48,9 @@ interface ReservaDao {
     )
     suspend fun adjuntarComprobante(id: Long, usuarioId: Long, uri: String)
 
+    @Query("DELETE FROM reservas WHERE id = :id AND usuarioId = :usuarioId")
+    suspend fun eliminar(id: Long, usuarioId: Long)
+
     @Query("UPDATE reservas SET estado = :estado WHERE id = :id")
     suspend fun actualizarEstado(id: Long, estado: String)
 

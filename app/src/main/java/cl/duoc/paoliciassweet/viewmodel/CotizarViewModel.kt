@@ -11,6 +11,10 @@ import cl.duoc.paoliciassweet.data.Sesion
 import cl.duoc.paoliciassweet.domain.Cotizacion
 import cl.duoc.paoliciassweet.domain.Cotizador
 import cl.duoc.paoliciassweet.domain.Validaciones
+import cl.duoc.paoliciassweet.network.FechaMapper
+import cl.duoc.paoliciassweet.network.ReservaRequest
+import cl.duoc.paoliciassweet.network.reservaNotas
+import cl.duoc.paoliciassweet.network.RetrofitClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,7 +45,11 @@ class CotizarViewModel(app: Application) : AndroidViewModel(app) {
 
     fun cargar(productoId: Long) {
         viewModelScope.launch {
-            val producto = repo.producto(productoId)
+            val producto = try {
+                RetrofitClient.remoto.producto(productoId) ?: repo.producto(productoId)
+            } catch (_: Exception) {
+                repo.producto(productoId)
+            }
             _state.update { it.copy(producto = producto) }
         }
     }
@@ -54,7 +62,6 @@ class CotizarViewModel(app: Application) : AndroidViewModel(app) {
         it.copy(bloque = valor, bloqueError = Validaciones.bloque(valor), mensaje = null)
     }
 
-    // La cotización se recalcula en tiempo real mientras el cliente escribe
     fun onAsistentes(valor: String) = _state.update {
         val error = Validaciones.asistentes(valor)
         val cotizacion = if (error == null && it.producto != null)
@@ -91,32 +98,68 @@ class CotizarViewModel(app: Application) : AndroidViewModel(app) {
         val usuarioId = Sesion.usuarioId.value ?: return
         val fecha = s.fechaMillis ?: return
         val asistentes = s.asistentes.trim().toInt()
+        val fechaIso = FechaMapper.longToIsoString(fecha)
 
         viewModelScope.launch {
-            if (repo.estaOcupado(fecha, s.bloque)) {
-                _state.update {
-                    it.copy(mensaje = "Esa fecha y horario ya tienen un evento confirmado. Elige otro.")
+            try {
+                // 1. Verificar disponibilidad en el backend y en local
+                val ocupadaRemota = RetrofitClient.remoto.fechaOcupada(fechaIso, s.bloque)
+                if (ocupadaRemota || repo.estaOcupado(fecha, s.bloque)) {
+                    _state.update {
+                        it.copy(mensaje = "Esa fecha y horario ya tienen un evento confirmado. Elige otro.")
+                    }
+                    return@launch
                 }
-                return@launch
-            }
-            val cotizacion = Cotizador.cotizar(producto.precioPorPersona, asistentes)
-            repo.crearReserva(
-                Reserva(
-                    usuarioId = usuarioId,
-                    productoId = producto.id,
-                    productoNombre = producto.nombre,
-                    fechaEvento = fecha,
-                    bloque = s.bloque,
-                    asistentes = asistentes,
-                    observaciones = s.observaciones.trim(),
-                    total = cotizacion.total,
-                    abono = cotizacion.abono,
-                    latitud = s.latitud,
-                    longitud = s.longitud,
-                    creadaEn = System.currentTimeMillis()
+
+                val cotizacion = Cotizador.cotizar(producto.precioPorPersona, asistentes)
+                val ubicacionTexto = if (s.latitud != null && s.longitud != null) {
+                    "GPS: ${s.latitud}, ${s.longitud}"
+                } else {
+                    "Por coordinar"
+                }
+                val notasCombinadas = reservaNotas(s.bloque, s.observaciones)
+
+                // 2. Guardar reserva en PostgreSQL (puerto 8082)
+                val reservaCreada = RetrofitClient.remoto.crearReserva(
+                    ReservaRequest(
+                        clienteNombre = "Cliente #$usuarioId",
+                        clienteTelefono = "+56900000000",
+                        clienteEmail = "usuario$usuarioId@paoliciassweet.cl",
+                        productoId = producto.id,
+                        productoNombre = producto.nombre,
+                        asistentes = asistentes,
+                        fechaEvento = fechaIso,
+                        direccionEvento = ubicacionTexto,
+                        notas = notasCombinadas,
+                        total = cotizacion.total,
+                        abono = cotizacion.abono
+                    )
                 )
-            )
-            _state.update { it.copy(guardado = true) }
+
+                // 3. Mantener copia sincronizada en local con el mismo ID
+                repo.crearReserva(
+                    Reserva(
+                        id = reservaCreada.id,
+                        usuarioId = usuarioId,
+                        productoId = producto.id,
+                        productoNombre = producto.nombre,
+                        fechaEvento = fecha,
+                        bloque = s.bloque,
+                        asistentes = asistentes,
+                        observaciones = s.observaciones.trim(),
+                        total = cotizacion.total,
+                        abono = cotizacion.abono,
+                        latitud = s.latitud,
+                        longitud = s.longitud,
+                        creadaEn = System.currentTimeMillis()
+                    )
+                )
+                _state.update { it.copy(guardado = true) }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(mensaje = "Error al conectar con el servidor: ${e.localizedMessage}")
+                }
+            }
         }
     }
 }

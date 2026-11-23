@@ -1,0 +1,2 @@
+Colocar aquí el APK firmado: PaoliciasSweet.apk
+Generarlo con: ./gradlew assembleRelease  (usa keystore/paoliciassweet.jks)

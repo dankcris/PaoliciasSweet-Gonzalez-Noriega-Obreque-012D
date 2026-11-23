@@ -16,14 +16,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,6 +53,7 @@ fun MisReservasScreen(
     vm: MisReservasViewModel = viewModel()
 ) {
     val reservas by vm.reservas.collectAsStateWithLifecycle()
+    val mensaje by vm.mensaje.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -69,6 +73,16 @@ fun MisReservasScreen(
                 .padding(padding)
                 .padding(horizontal = 16.dp)
         ) {
+            mensaje?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .clickable { vm.limpiarMensaje() }
+                )
+            }
             AnimatedVisibility(visible = reservas.isEmpty()) {
                 Text(
                     "Aún no tienes reservas. Elige un producto del catálogo y cotiza tu evento.",
@@ -81,6 +95,7 @@ fun MisReservasScreen(
                     ReservaCard(
                         reserva = reserva,
                         onComprobante = { onComprobante(reserva.id) },
+                        onCancelar = { vm.eliminar(reserva.id) },
                         modifier = Modifier.animateItem()
                     )
                 }
@@ -91,8 +106,31 @@ fun MisReservasScreen(
 }
 
 @Composable
-private fun ReservaCard(reserva: Reserva, onComprobante: () -> Unit, modifier: Modifier = Modifier) {
+private fun ReservaCard(
+    reserva: Reserva,
+    onComprobante: () -> Unit,
+    onCancelar: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     var expandida by remember { mutableStateOf(false) }
+    var confirmarCancelacion by remember { mutableStateOf(false) }
+
+    if (confirmarCancelacion) {
+        AlertDialog(
+            onDismissRequest = { confirmarCancelacion = false },
+            title = { Text("Cancelar reserva") },
+            text = { Text("¿Seguro que quieres cancelar la reserva de ${reserva.productoNombre}?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmarCancelacion = false
+                    onCancelar()
+                }) { Text("Sí, cancelar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmarCancelacion = false }) { Text("Volver") }
+            }
+        )
+    }
 
     Card(
         modifier = modifier
@@ -140,6 +178,14 @@ private fun ReservaCard(reserva: Reserva, onComprobante: () -> Unit, modifier: M
                         if (reserva.estado == EstadoReserva.PENDIENTE) "  Adjuntar comprobante del abono"
                         else "  Cambiar comprobante"
                     )
+                }
+                OutlinedButton(
+                    onClick = { confirmarCancelacion = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
+                ) {
+                    Text("Cancelar reserva")
                 }
             }
         }

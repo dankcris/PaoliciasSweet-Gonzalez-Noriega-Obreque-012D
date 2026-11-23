@@ -51,6 +51,8 @@ class Repositorio(private val db: AppDatabase) {
     suspend fun adjuntarComprobante(id: Long, usuarioId: Long, uri: String) =
         db.reservaDao().adjuntarComprobante(id, usuarioId, uri)
 
+    suspend fun eliminarReserva(id: Long, usuarioId: Long) = db.reservaDao().eliminar(id, usuarioId)
+
     // ---- Agenda (administradora) ----
     fun agenda(): Flow<List<ReservaAgenda>> = db.reservaDao().observarAgenda()
 

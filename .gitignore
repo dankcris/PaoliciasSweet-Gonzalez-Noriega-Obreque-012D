@@ -9,8 +9,4 @@
 .externalNativeBuild
 .cxx
 *.aab
-
-# Archivos privados de firma: no publicar en GitHub
-keystore/
-keystore.properties
-*.jks
+# El APK firmado (release/) y la llave (keystore/) SÍ se versionan por requisito del encargo.
